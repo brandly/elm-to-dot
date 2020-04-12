@@ -9,6 +9,7 @@ import Platform
 type Msg
     = Msg
     | FileContents (Result D.Error String)
+    | FileError (Result D.Error String)
 
 
 type Model
@@ -28,10 +29,10 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         FileContents (Ok str) ->
-            Debug.log str ( model, Cmd.none )
+            Debug.log ("contents: " ++ str) ( model, Cmd.none )
 
-        FileContents (Err e) ->
-            Debug.log "fail" ( model, Cmd.none )
+        FileError (Ok str) ->
+            Debug.log ("Error: " ++ str) ( model, Cmd.none )
 
         _ ->
             Debug.log "other msg" ( model, Cmd.none )
@@ -42,7 +43,16 @@ decodeFileContents =
     D.decodeValue D.string
 
 
+decodeFileError : D.Value -> Result D.Error String
+decodeFileError =
+    D.decodeValue (D.field "code" D.string)
+
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Native.File.readFileSuccess
-        (decodeFileContents >> FileContents)
+    Sub.batch
+        [ Native.File.readFileSuccess
+            (decodeFileContents >> FileContents)
+        , Native.File.readFileError
+            (decodeFileError >> FileError)
+        ]
