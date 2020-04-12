@@ -12,8 +12,8 @@ import Platform
 
 
 type Msg
-    = FileContents (Result D.Error File)
-    | FileError (Result D.Error String)
+    = ReadFileSuccess (Result D.Error File)
+    | FileError (Result D.Error NativeError)
 
 
 type Model
@@ -43,7 +43,7 @@ main =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ((Base base) as model) =
     case msg of
-        FileContents (Ok { name, contents }) ->
+        ReadFileSuccess (Ok { name, contents }) ->
             case parseImports contents of
                 Ok rawImports ->
                     let
@@ -65,8 +65,12 @@ update msg ((Base base) as model) =
                 Err e ->
                     Debug.log ("failed to parse: " ++ Debug.toString e) ( model, Cmd.none )
 
-        FileError (Ok str) ->
-            Debug.log ("Error: " ++ str) ( model, Cmd.none )
+        FileError (Ok { code, message }) ->
+            if code == "ENOENT" then
+                ( model, Cmd.none )
+
+            else
+                Debug.log ("Error: " ++ message) ( model, Cmd.none )
 
         _ ->
             Debug.log "other msg" ( model, Cmd.none )
@@ -86,24 +90,37 @@ type alias File =
     { name : String, contents : String }
 
 
-decodeFileContents : D.Value -> Result D.Error File
-decodeFileContents =
+decodeReadFileSuccess : D.Value -> Result D.Error File
+decodeReadFileSuccess =
     D.decodeValue <|
         D.map2 File
             (D.field "name" D.string)
             (D.field "contents" D.string)
 
 
-decodeFileError : D.Value -> Result D.Error String
-decodeFileError =
-    D.decodeValue (D.field "message" D.string)
+type alias NativeError =
+    { code : String
+    , syscall : String
+    , path : String
+    , message : String
+    }
+
+
+decodeNativeError : D.Value -> Result D.Error NativeError
+decodeNativeError =
+    D.decodeValue <|
+        D.map4 NativeError
+            (D.field "code" D.string)
+            (D.field "syscall" D.string)
+            (D.field "path" D.string)
+            (D.field "message" D.string)
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ Native.File.readFileSuccess
-            (decodeFileContents >> FileContents)
+            (decodeReadFileSuccess >> ReadFileSuccess)
         , Native.File.readFileError
-            (decodeFileError >> FileError)
+            (decodeNativeError >> FileError)
         ]
