@@ -11,7 +11,10 @@ module.exports = app => {
           message: e.message
         })
       } else {
-        app.ports.readFileSuccess.send(file.toString())
+        app.ports.readFileSuccess.send({
+          name: fileName,
+          contents: file.toString()
+        })
       }
     })
   })

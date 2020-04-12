@@ -12,7 +12,7 @@ import Platform
 
 
 type Msg
-    = FileContents (Result D.Error String)
+    = FileContents (Result D.Error File)
     | FileError (Result D.Error String)
 
 
@@ -43,7 +43,7 @@ main =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ((Base base) as model) =
     case msg of
-        FileContents (Ok contents) ->
+        FileContents (Ok { name, contents }) ->
             case parseImports contents of
                 Ok rawImports ->
                     let
@@ -82,9 +82,16 @@ parseImports elm =
             )
 
 
-decodeFileContents : D.Value -> Result D.Error String
+type alias File =
+    { name : String, contents : String }
+
+
+decodeFileContents : D.Value -> Result D.Error File
 decodeFileContents =
-    D.decodeValue D.string
+    D.decodeValue <|
+        D.map2 File
+            (D.field "name" D.string)
+            (D.field "contents" D.string)
 
 
 decodeFileError : D.Value -> Result D.Error String
