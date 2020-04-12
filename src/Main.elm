@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Dict exposing (Dict)
 import Elm.Parser
 import Elm.RawFile as RawFile
 import Elm.Syntax.Import exposing (Import)
@@ -17,7 +18,12 @@ type Msg
 
 
 type Model
-    = Base String
+    = Model { base : String, graph : Dict String (List String) }
+
+
+mapGraph : (Dict String (List String) -> Dict String (List String)) -> Model -> Model
+mapGraph map (Model m) =
+    Model { m | graph = map m.graph }
 
 
 main : Program String Model Msg
@@ -34,14 +40,16 @@ main =
                         List.take (List.length splits - 1) splits
                             |> String.join "/"
                 in
-                ( Base base, Native.File.readFile (E.string entryFile) )
+                ( Model { base = base, graph = Dict.empty }
+                , Native.File.readFile (E.string entryFile)
+                )
         , update = update
         , subscriptions = subscriptions
         }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ((Base base) as model) =
+update msg ((Model { base, graph }) as model) =
     case msg of
         ReadFileSuccess (Ok { name, contents }) ->
             case parseImports contents of
@@ -57,9 +65,12 @@ update msg ((Base base) as model) =
                                     )
                     in
                     Debug.log ("imports: " ++ Debug.toString imports)
-                        ( model
+                        ( mapGraph (Dict.insert name imports) model
                         , Cmd.batch
-                            (List.map (\imp -> Native.File.readFile (E.string imp)) imports)
+                            (imports
+                                |> List.filter (\file -> Dict.member file graph |> not)
+                                |> List.map (\imp -> Native.File.readFile (E.string imp))
+                            )
                         )
 
                 Err e ->
@@ -73,7 +84,7 @@ update msg ((Base base) as model) =
                 Debug.log ("Error: " ++ message) ( model, Cmd.none )
 
         _ ->
-            Debug.log "other msg" ( model, Cmd.none )
+            Debug.log ("other msg: " ++ Debug.toString msg) ( model, Cmd.none )
 
 
 parseImports : String -> Result (List Parser.DeadEnd) (List (List String))
