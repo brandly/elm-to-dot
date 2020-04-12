@@ -11,8 +11,7 @@ import Platform
 
 
 type Msg
-    = Msg
-    | FileContents (Result D.Error String)
+    = FileContents (Result D.Error String)
     | FileError (Result D.Error String)
 
 
@@ -43,10 +42,10 @@ main =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ((Base base) as model) =
     case msg of
-        FileContents (Ok str) ->
+        FileContents (Ok contents) ->
             let
                 imports =
-                    parseImports str
+                    parseImports contents
                         |> List.map
                             (\path ->
                                 (base :: path)
@@ -68,8 +67,8 @@ update msg ((Base base) as model) =
 
 
 parseImports : String -> List (List String)
-parseImports str =
-    Elm.Parser.parse str
+parseImports elm =
+    Elm.Parser.parse elm
         |> Result.map
             (\v ->
                 RawFile.imports v
