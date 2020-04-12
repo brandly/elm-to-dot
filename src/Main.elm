@@ -7,6 +7,7 @@ import Elm.Syntax.Node as Node
 import Json.Decode as D
 import Json.Encode as E
 import Native.File
+import Parser
 import Platform
 
 
@@ -43,21 +44,26 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ((Base base) as model) =
     case msg of
         FileContents (Ok contents) ->
-            let
-                imports =
-                    parseImports contents
-                        |> List.map
-                            (\path ->
-                                (base :: path)
-                                    |> String.join "/"
-                                    |> (\p -> p ++ ".elm")
-                            )
-            in
-            Debug.log ("imports: " ++ Debug.toString imports)
-                ( model
-                , Cmd.batch
-                    (List.map (\imp -> Native.File.readFile (E.string imp)) imports)
-                )
+            case parseImports contents of
+                Ok rawImports ->
+                    let
+                        imports =
+                            rawImports
+                                |> List.map
+                                    (\path ->
+                                        (base :: path)
+                                            |> String.join "/"
+                                            |> (\p -> p ++ ".elm")
+                                    )
+                    in
+                    Debug.log ("imports: " ++ Debug.toString imports)
+                        ( model
+                        , Cmd.batch
+                            (List.map (\imp -> Native.File.readFile (E.string imp)) imports)
+                        )
+
+                Err e ->
+                    Debug.log ("failed to parse: " ++ Debug.toString e) ( model, Cmd.none )
 
         FileError (Ok str) ->
             Debug.log ("Error: " ++ str) ( model, Cmd.none )
@@ -66,7 +72,7 @@ update msg ((Base base) as model) =
             Debug.log "other msg" ( model, Cmd.none )
 
 
-parseImports : String -> List (List String)
+parseImports : String -> Result (List Parser.DeadEnd) (List (List String))
 parseImports elm =
     Elm.Parser.parse elm
         |> Result.map
@@ -74,8 +80,6 @@ parseImports elm =
                 RawFile.imports v
                     |> List.map (.moduleName >> Node.value)
             )
-        -- otherwise, we could handle (List DeadEnd) and exit with a message?
-        |> Result.withDefault []
 
 
 decodeFileContents : D.Value -> Result D.Error String
