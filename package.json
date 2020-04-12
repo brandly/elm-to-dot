@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "build": "elm make src/Main.elm --output dist/index.js"
+  },
   "devDependencies": {
     "elm": "0.19.1-3"
   }
