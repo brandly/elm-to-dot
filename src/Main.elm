@@ -88,7 +88,7 @@ update msg model =
 
             else
                 ( Ready { graph = graph }
-                , Native.Log.line (E.string "done!!!")
+                , Native.Log.line (E.string (viewGraph graph))
                 )
     in
     case ( model, msg ) of
@@ -144,6 +144,22 @@ parseImports elm =
                 RawFile.imports v
                     |> List.map (.moduleName >> Node.value)
             )
+
+
+viewGraph : Dict String (List String) -> String
+viewGraph graph =
+    graph
+        |> Dict.toList
+        |> List.map
+            (\( k, v ) ->
+                k
+                    ++ "\n"
+                    ++ (v
+                            |> List.map (\dep -> "\t" ++ dep)
+                            |> String.join "\n"
+                       )
+            )
+        |> String.join "\n"
 
 
 type alias File =
