@@ -187,10 +187,9 @@ toDot graph =
                                 |> List.filter (\dep -> Dict.member dep graph)
                                 |> List.map (toNodeId >> DL.EdgeNode)
                     in
-                    toNodeStmt node
-                        :: List.map
-                            (\edge -> DL.EdgeStmtNode (toNodeId node) edge [] [])
-                            edges
+                    List.map
+                        (\edge -> DL.EdgeStmtNode (toNodeId node) edge [] [])
+                        edges
                 )
             |> List.concat
         )
@@ -199,11 +198,6 @@ toDot graph =
 toNodeId : String -> DL.NodeId
 toNodeId id =
     DL.NodeId (DL.ID id) Nothing
-
-
-toNodeStmt : String -> DL.Stmt
-toNodeStmt id =
-    DL.NodeStmt (toNodeId id) []
 
 
 type alias File =
