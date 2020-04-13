@@ -8,6 +8,7 @@ import Elm.Syntax.Node as Node
 import Json.Decode as D
 import Json.Encode as E
 import Native.File
+import Native.Log
 import Parser
 import Platform
 
@@ -17,13 +18,26 @@ type Msg
     | FileError (Result D.Error NativeError)
 
 
+type alias CrawlingState =
+    { base : String
+    , graph : Dict String (List String)
+    , pending : List String
+    }
+
+
 type Model
-    = Model { base : String, graph : Dict String (List String) }
+    = Crawling CrawlingState
+    | Ready { graph : Dict String (List String) }
 
 
-mapGraph : (Dict String (List String) -> Dict String (List String)) -> Model -> Model
-mapGraph map (Model m) =
-    Model { m | graph = map m.graph }
+mapGraph : (Dict String (List String) -> Dict String (List String)) -> CrawlingState -> CrawlingState
+mapGraph map m =
+    { m | graph = map m.graph }
+
+
+mapPending : (List String -> List String) -> CrawlingState -> CrawlingState
+mapPending map m =
+    { m | pending = map m.pending }
 
 
 main : Program String Model Msg
@@ -40,7 +54,7 @@ main =
                         List.take (List.length splits - 1) splits
                             |> String.join "/"
                 in
-                ( Model { base = base, graph = Dict.empty }
+                ( Crawling { base = base, graph = Dict.empty, pending = [ entryFile ] }
                 , Native.File.readFile (E.string entryFile)
                 )
         , update = update
@@ -49,9 +63,36 @@ main =
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ((Model { base, graph }) as model) =
-    case msg of
-        ReadFileSuccess (Ok { name, contents }) ->
+update msg model =
+    let
+        finishCrawling ( m, cmd ) =
+            let
+                pending =
+                    case m of
+                        Crawling s ->
+                            s.pending
+
+                        _ ->
+                            []
+
+                graph =
+                    case m of
+                        Crawling s ->
+                            s.graph
+
+                        Ready s ->
+                            s.graph
+            in
+            if List.length pending > 0 then
+                ( m, cmd )
+
+            else
+                ( Ready { graph = graph }
+                , Native.Log.line (E.string "done!!!")
+                )
+    in
+    case ( model, msg ) of
+        ( Crawling ({ base, graph } as state), ReadFileSuccess (Ok { name, contents }) ) ->
             case parseImports contents of
                 Ok rawImports ->
                     let
@@ -63,22 +104,30 @@ update msg ((Model { base, graph }) as model) =
                                             |> String.join "/"
                                             |> (\p -> p ++ ".elm")
                                     )
+
+                        importsToFetch =
+                            List.filter (\file -> Dict.member file graph |> not) imports
+
+                        state_ =
+                            state
+                                |> mapGraph (Dict.insert name imports)
+                                |> mapPending (\p -> List.filter ((/=) name) p ++ importsToFetch)
                     in
-                    Debug.log ("imports: " ++ Debug.toString imports)
-                        ( mapGraph (Dict.insert name imports) model
+                    finishCrawling
+                        ( Crawling state_
                         , Cmd.batch
-                            (imports
-                                |> List.filter (\file -> Dict.member file graph |> not)
-                                |> List.map (\imp -> Native.File.readFile (E.string imp))
+                            (importsToFetch
+                                |> List.map (E.string >> Native.File.readFile)
                             )
                         )
 
                 Err e ->
                     Debug.log ("failed to parse: " ++ Debug.toString e) ( model, Cmd.none )
 
-        FileError (Ok { code, message }) ->
+        ( Crawling state, FileError (Ok { code, message, path }) ) ->
             if code == "ENOENT" then
-                ( model, Cmd.none )
+                finishCrawling
+                    ( Crawling <| mapPending (List.filter ((/=) path)) state, Cmd.none )
 
             else
                 Debug.log ("Error: " ++ message) ( model, Cmd.none )
@@ -128,10 +177,15 @@ decodeNativeError =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.batch
-        [ Native.File.readFileSuccess
-            (decodeReadFileSuccess >> ReadFileSuccess)
-        , Native.File.readFileError
-            (decodeNativeError >> FileError)
-        ]
+subscriptions model =
+    case model of
+        Crawling _ ->
+            Sub.batch
+                [ Native.File.readFileSuccess
+                    (decodeReadFileSuccess >> ReadFileSuccess)
+                , Native.File.readFileError
+                    (decodeNativeError >> FileError)
+                ]
+
+        _ ->
+            Sub.none

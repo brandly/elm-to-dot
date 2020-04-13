@@ -18,4 +18,8 @@ module.exports = app => {
       }
     })
   })
+
+  app.ports.line.subscribe(line => {
+    console.log(line)
+  })
 }
