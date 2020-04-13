@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Dict exposing (Dict)
+import DotLang as DL
 import Elm.Parser
 import Elm.RawFile as RawFile
 import Elm.Syntax.Import exposing (Import)
@@ -148,18 +149,35 @@ parseImports elm =
 
 viewGraph : Dict String (List String) -> String
 viewGraph graph =
-    graph
-        |> Dict.toList
-        |> List.map
-            (\( k, v ) ->
-                k
-                    ++ "\n"
-                    ++ (v
-                            |> List.map (\dep -> "\t" ++ dep)
-                            |> String.join "\n"
-                       )
+    DL.toString <|
+        DL.Dot DL.Digraph
+            Nothing
+            (Dict.toList graph
+                |> List.map
+                    (\( node, deps ) ->
+                        let
+                            edges =
+                                deps
+                                    |> List.filter (\dep -> Dict.member dep graph)
+                                    |> List.map (toNodeId >> DL.EdgeNode)
+                        in
+                        toNodeStmt node
+                            :: List.map
+                                (\edge -> DL.EdgeStmtNode (toNodeId node) edge [] [])
+                                edges
+                    )
+                |> List.concat
             )
-        |> String.join "\n"
+
+
+toNodeId : String -> DL.NodeId
+toNodeId id =
+    DL.NodeId (DL.ID id) Nothing
+
+
+toNodeStmt : String -> DL.Stmt
+toNodeStmt id =
+    DL.NodeStmt (toNodeId id) []
 
 
 type alias File =
