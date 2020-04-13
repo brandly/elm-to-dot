@@ -8,7 +8,7 @@ import Elm.Syntax.Import exposing (Import)
 import Elm.Syntax.Node as Node
 import Json.Decode as D
 import Json.Encode as E
-import Native.File
+import Native.File exposing (File, NativeError)
 import Native.Log
 import Parser
 import Platform
@@ -200,45 +200,15 @@ toNodeId id =
     DL.NodeId (DL.ID id) Nothing
 
 
-type alias File =
-    { name : String, contents : String }
-
-
-decodeReadFileSuccess : D.Value -> Result D.Error File
-decodeReadFileSuccess =
-    D.decodeValue <|
-        D.map2 File
-            (D.field "name" D.string)
-            (D.field "contents" D.string)
-
-
-type alias NativeError =
-    { code : String
-    , syscall : String
-    , path : String
-    , message : String
-    }
-
-
-decodeNativeError : D.Value -> Result D.Error NativeError
-decodeNativeError =
-    D.decodeValue <|
-        D.map4 NativeError
-            (D.field "code" D.string)
-            (D.field "syscall" D.string)
-            (D.field "path" D.string)
-            (D.field "message" D.string)
-
-
 subscriptions : Model -> Sub Msg
 subscriptions model =
     case model of
         Crawling _ ->
             Sub.batch
                 [ Native.File.readFileSuccess
-                    (decodeReadFileSuccess >> ReadFileSuccess)
+                    (Native.File.decodeReadFileSuccess >> ReadFileSuccess)
                 , Native.File.readFileError
-                    (decodeNativeError >> FileError)
+                    (Native.File.decodeNativeError >> FileError)
                 ]
 
         _ ->
