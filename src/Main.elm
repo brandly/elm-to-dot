@@ -94,30 +94,24 @@ update msg model =
     in
     case ( model, msg ) of
         ( Crawling ({ base, graph } as state), ReadFileSuccess (Ok { name, contents }) ) ->
-            case parseImports contents of
-                Ok rawImports ->
+            case parseModules contents of
+                Ok modules ->
                     let
-                        imports =
-                            rawImports
-                                |> List.map
-                                    (\path ->
-                                        (base :: path)
-                                            |> String.join "/"
-                                            |> (\p -> p ++ ".elm")
-                                    )
+                        files =
+                            modules |> List.map (moduleToFile base)
 
-                        importsToFetch =
-                            List.filter (\file -> Dict.member file graph |> not) imports
+                        filesToFetch =
+                            List.filter (\file -> Dict.member (fileToModule base file) graph |> not) files
 
                         state_ =
                             state
-                                |> mapGraph (Dict.insert name imports)
-                                |> mapPending (\p -> List.filter ((/=) name) p ++ importsToFetch)
+                                |> mapGraph (Dict.insert (fileToModule base name) modules)
+                                |> mapPending (\p -> List.filter ((/=) name) p ++ filesToFetch)
                     in
                     finishCrawling
                         ( Crawling state_
                         , Cmd.batch
-                            (importsToFetch
+                            (filesToFetch
                                 |> List.map (E.string >> Native.File.readFile)
                             )
                         )
@@ -137,14 +131,34 @@ update msg model =
             Debug.log ("other msg: " ++ Debug.toString msg) ( model, Cmd.none )
 
 
-parseImports : String -> Result (List Parser.DeadEnd) (List (List String))
-parseImports elm =
+parseModules : String -> Result (List Parser.DeadEnd) (List String)
+parseModules elm =
     Elm.Parser.parse elm
         |> Result.map
             (\v ->
                 RawFile.imports v
-                    |> List.map (.moduleName >> Node.value)
+                    |> List.map (.moduleName >> Node.value >> importToModule)
             )
+
+
+importToModule : List String -> String
+importToModule =
+    String.join "."
+
+
+moduleToFile : String -> String -> String
+moduleToFile base mod =
+    ((base :: String.split "." mod) |> String.join "/") ++ ".elm"
+
+
+fileToModule : String -> String -> String
+fileToModule base file =
+    file
+        -- +1 for the /
+        |> String.dropLeft (String.length base + 1)
+        |> String.dropRight (String.length ".elm")
+        |> String.split "/"
+        |> String.join "."
 
 
 viewGraph : Dict String (List String) -> String
