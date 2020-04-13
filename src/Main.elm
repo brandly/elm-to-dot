@@ -162,26 +162,30 @@ fileToModule base file =
 
 
 viewGraph : Dict String (List String) -> String
-viewGraph graph =
-    DL.toString <|
-        DL.Dot DL.Digraph
-            Nothing
-            (Dict.toList graph
-                |> List.map
-                    (\( node, deps ) ->
-                        let
-                            edges =
-                                deps
-                                    |> List.filter (\dep -> Dict.member dep graph)
-                                    |> List.map (toNodeId >> DL.EdgeNode)
-                        in
-                        toNodeStmt node
-                            :: List.map
-                                (\edge -> DL.EdgeStmtNode (toNodeId node) edge [] [])
-                                edges
-                    )
-                |> List.concat
-            )
+viewGraph =
+    toDot >> DL.toString
+
+
+toDot : Dict String (List String) -> DL.Dot
+toDot graph =
+    DL.Dot DL.Digraph
+        Nothing
+        (Dict.toList graph
+            |> List.map
+                (\( node, deps ) ->
+                    let
+                        edges =
+                            deps
+                                |> List.filter (\dep -> Dict.member dep graph)
+                                |> List.map (toNodeId >> DL.EdgeNode)
+                    in
+                    toNodeStmt node
+                        :: List.map
+                            (\edge -> DL.EdgeStmtNode (toNodeId node) edge [] [])
+                            edges
+                )
+            |> List.concat
+        )
 
 
 toNodeId : String -> DL.NodeId
