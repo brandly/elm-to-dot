@@ -4,7 +4,8 @@
   "license": "MIT",
   "scripts": {
     "build": "elm make src/Main.elm --optimize --output dist/index.js",
-    "cli": "npm run build && node index.js"
+    "cli": "npm run build && node index.js",
+    "prepublish": "npm run build"
   },
   "devDependencies": {
     "elm": "0.19.1-3"
