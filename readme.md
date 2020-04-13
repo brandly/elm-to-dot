@@ -37,3 +37,5 @@ digraph {
     "Native.Log" -> "Json.Encode"
 }
 ```
+
+![dependencies](https://github.com/brandly/elm-to-dot/blob/master/dependency-graph.svg)
