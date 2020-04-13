@@ -176,22 +176,27 @@ viewGraph =
 
 toDot : Dict String (List String) -> DL.Dot
 toDot graph =
+    let
+        edgeStmts =
+            Dict.toList graph
+                |> List.map
+                    (\( node, deps ) ->
+                        let
+                            edges =
+                                deps
+                                    |> List.filter (\dep -> Dict.member dep graph)
+                                    |> List.map (toNodeId >> DL.EdgeNode)
+                        in
+                        List.map
+                            (\edge -> DL.EdgeStmtNode (toNodeId node) edge [] [])
+                            edges
+                    )
+                |> List.concat
+    in
     DL.Dot DL.Digraph
         Nothing
-        (Dict.toList graph
-            |> List.map
-                (\( node, deps ) ->
-                    let
-                        edges =
-                            deps
-                                |> List.filter (\dep -> Dict.member dep graph)
-                                |> List.map (toNodeId >> DL.EdgeNode)
-                    in
-                    List.map
-                        (\edge -> DL.EdgeStmtNode (toNodeId node) edge [] [])
-                        edges
-                )
-            |> List.concat
+        (DL.LooseAttr (DL.Attr (DL.ID "rankdir") (DL.ID "LR"))
+            :: edgeStmts
         )
 
 
