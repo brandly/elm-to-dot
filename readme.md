@@ -38,4 +38,6 @@ digraph {
 }
 ```
 
+Generate an SVG with [Graphviz](https://www.graphviz.org/). I used [this browser-based version](http://viz-js.com/).
+
 ![dependencies](https://github.com/brandly/elm-to-dot/blob/master/dependency-graph.svg)
