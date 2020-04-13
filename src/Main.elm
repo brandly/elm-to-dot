@@ -117,7 +117,7 @@ update msg model =
                         )
 
                 Err e ->
-                    Debug.log ("failed to parse: " ++ Debug.toString e) ( model, Cmd.none )
+                    ( model, Native.Log.line <| E.string ("failed to parse: " ++ Parser.deadEndsToString e) )
 
         ( Crawling state, FileError (Ok { code, message, path }) ) ->
             -- dead end because we naively look for local file paths, even for installed modules
@@ -133,10 +133,10 @@ update msg model =
                     ( Crawling state_, Cmd.none )
 
             else
-                Debug.log ("Error: " ++ message) ( model, Cmd.none )
+                ( model, Native.Log.line <| E.string ("Error: " ++ message) )
 
         _ ->
-            Debug.log ("other msg: " ++ Debug.toString msg) ( model, Cmd.none )
+            ( model, Native.Log.line <| E.string "unexpected msg" )
 
 
 parseModules : String -> Result (List Parser.DeadEnd) (List String)

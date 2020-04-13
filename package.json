@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "elm make src/Main.elm --output dist/index.js",
+    "build": "elm make src/Main.elm --optimize --output dist/index.js",
     "cli": "npm run build && node index.js"
   },
   "devDependencies": {
