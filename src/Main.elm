@@ -120,9 +120,17 @@ update msg model =
                     Debug.log ("failed to parse: " ++ Debug.toString e) ( model, Cmd.none )
 
         ( Crawling state, FileError (Ok { code, message, path }) ) ->
+            -- dead end because we naively look for local file paths, even for installed modules
+            -- treat it like a dead end but still insert it into the graph
             if code == "ENOENT" then
+                let
+                    state_ =
+                        state
+                            |> mapGraph (Dict.insert (fileToModule state.base path) [])
+                            |> mapPending (List.filter ((/=) path))
+                in
                 finishCrawling
-                    ( Crawling <| mapPending (List.filter ((/=) path)) state, Cmd.none )
+                    ( Crawling state_, Cmd.none )
 
             else
                 Debug.log ("Error: " ++ message) ( model, Cmd.none )
