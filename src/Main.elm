@@ -21,6 +21,7 @@ type alias CrawlingState =
     { base : String
     , graph : Graph
     , pending : List String
+    , includeExternal : Bool
     }
 
 
@@ -53,7 +54,12 @@ main =
                         List.take (List.length splits - 1) splits
                             |> String.join "/"
                 in
-                ( Crawling { base = base, graph = Graph.empty, pending = [ entryFile ] }
+                ( Crawling
+                    { base = base
+                    , graph = Graph.empty
+                    , pending = [ entryFile ]
+                    , includeExternal = False
+                    }
                 , Native.File.readFile (E.string entryFile)
                 )
         , update = update
@@ -106,13 +112,20 @@ update msg model =
                     ( model, Native.Log.line <| E.string ("failed to parse: " ++ Parser.deadEndsToString e) )
 
         ( Crawling state, FileError (Ok { code, message, path }) ) ->
-            -- dead end because we naively look for local file paths, even for installed modules
-            -- treat it like a dead end but still insert it into the graph
             if code == "ENOENT" then
                 let
+                    updateGraph =
+                        -- dead end because we naively look for local file paths, even for installed modules
+                        -- treat it like a dead end but still insert it into the graph
+                        if state.includeExternal then
+                            mapGraph (Graph.insert (fileToModule state.base path) [])
+
+                        else
+                            identity
+
                     state_ =
                         state
-                            |> mapGraph (Graph.insert (fileToModule state.base path) [])
+                            |> updateGraph
                             |> mapPending (List.filter ((/=) path))
                 in
                 finishCrawling
