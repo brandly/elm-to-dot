@@ -65,30 +65,18 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
         finishCrawling ( m, cmd ) =
-            let
-                pending =
-                    case m of
-                        Crawling s ->
-                            s.pending
+            case m of
+                Crawling s ->
+                    if List.length s.pending > 0 then
+                        ( m, cmd )
 
-                        _ ->
-                            []
+                    else
+                        ( Ready s.graph
+                        , Native.Log.line (E.string (Graph.toString s.graph))
+                        )
 
-                graph =
-                    case m of
-                        Crawling s ->
-                            s.graph
-
-                        Ready g ->
-                            g
-            in
-            if List.length pending > 0 then
-                ( m, cmd )
-
-            else
-                ( Ready graph
-                , Native.Log.line (E.string (Graph.toString graph))
-                )
+                _ ->
+                    ( m, cmd )
     in
     case ( model, msg ) of
         ( Crawling ({ base, graph } as state), ReadFileSuccess (Ok { name, contents }) ) ->
