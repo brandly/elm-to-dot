@@ -5,6 +5,24 @@ Crawl Elm dependencies and produce a dependency graph in [DOT](<https://en.wikip
 ```shell
 $ npm install --global elm-to-dot
 $ elm-to-dot src/Main.elm
+digraph {
+    rankdir=LR
+    "Graph" -> Dict
+    "Graph" -> DotLang
+    Main -> "Elm.Parser"
+    Main -> "Elm.RawFile"
+    Main -> "Elm.Syntax.Node"
+    Main -> "Graph"
+    Main -> "Json.Decode"
+    Main -> "Json.Encode"
+    Main -> "Native.File"
+    Main -> "Native.Log"
+    Main -> Parser
+    Main -> Platform
+    "Native.File" -> "Json.Decode"
+    "Native.File" -> "Json.Encode"
+    "Native.Log" -> "Json.Encode"
+}
 ```
 
 ## why?
@@ -20,12 +38,12 @@ $ npm install
 $ ./bin.js src/Main.elm
 digraph {
     rankdir=LR
-    Main -> Dict
-    Main -> DotLang
+    "Graph" -> Dict
+    "Graph" -> DotLang
     Main -> "Elm.Parser"
     Main -> "Elm.RawFile"
-    Main -> "Elm.Syntax.Import"
     Main -> "Elm.Syntax.Node"
+    Main -> "Graph"
     Main -> "Json.Decode"
     Main -> "Json.Encode"
     Main -> "Native.File"
@@ -38,6 +56,6 @@ digraph {
 }
 ```
 
-Generate an SVG with [Graphviz](https://www.graphviz.org/). I used [this browser-based version](http://viz-js.com/).
+DOT can be fed into [Graphviz](https://www.graphviz.org/) to generate an SVG. I used [this browser-based version](http://viz-js.com/).
 
 ![dependencies](https://github.com/brandly/elm-to-dot/blob/master/dependency-graph.svg)
