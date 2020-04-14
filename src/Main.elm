@@ -1,11 +1,9 @@
 module Main exposing (..)
 
-import Dict exposing (Dict)
-import DotLang as DL
 import Elm.Parser
 import Elm.RawFile as RawFile
-import Elm.Syntax.Import exposing (Import)
 import Elm.Syntax.Node as Node
+import Graph exposing (Graph)
 import Json.Decode as D
 import Json.Encode as E
 import Native.File exposing (File, NativeError)
@@ -21,17 +19,17 @@ type Msg
 
 type alias CrawlingState =
     { base : String
-    , graph : Dict String (List String)
+    , graph : Graph
     , pending : List String
     }
 
 
 type Model
     = Crawling CrawlingState
-    | Ready { graph : Dict String (List String) }
+    | Ready Graph
 
 
-mapGraph : (Dict String (List String) -> Dict String (List String)) -> CrawlingState -> CrawlingState
+mapGraph : (Graph -> Graph) -> CrawlingState -> CrawlingState
 mapGraph map m =
     { m | graph = map m.graph }
 
@@ -55,7 +53,7 @@ main =
                         List.take (List.length splits - 1) splits
                             |> String.join "/"
                 in
-                ( Crawling { base = base, graph = Dict.empty, pending = [ entryFile ] }
+                ( Crawling { base = base, graph = Graph.empty, pending = [ entryFile ] }
                 , Native.File.readFile (E.string entryFile)
                 )
         , update = update
@@ -81,15 +79,15 @@ update msg model =
                         Crawling s ->
                             s.graph
 
-                        Ready s ->
-                            s.graph
+                        Ready g ->
+                            g
             in
             if List.length pending > 0 then
                 ( m, cmd )
 
             else
-                ( Ready { graph = graph }
-                , Native.Log.line (E.string (viewGraph graph))
+                ( Ready graph
+                , Native.Log.line (E.string (Graph.toString graph))
                 )
     in
     case ( model, msg ) of
@@ -101,11 +99,11 @@ update msg model =
                             modules |> List.map (moduleToFile base)
 
                         filesToFetch =
-                            List.filter (\file -> Dict.member (fileToModule base file) graph |> not) files
+                            List.filter (\file -> not <| Graph.includes (fileToModule base file) graph) files
 
                         state_ =
                             state
-                                |> mapGraph (Dict.insert (fileToModule base name) modules)
+                                |> mapGraph (Graph.insert (fileToModule base name) modules)
                                 |> mapPending (\p -> List.filter ((/=) name) p ++ filesToFetch)
                     in
                     finishCrawling
@@ -126,7 +124,7 @@ update msg model =
                 let
                     state_ =
                         state
-                            |> mapGraph (Dict.insert (fileToModule state.base path) [])
+                            |> mapGraph (Graph.insert (fileToModule state.base path) [])
                             |> mapPending (List.filter ((/=) path))
                 in
                 finishCrawling
@@ -167,42 +165,6 @@ fileToModule base file =
         |> String.dropRight (String.length ".elm")
         |> String.split "/"
         |> String.join "."
-
-
-viewGraph : Dict String (List String) -> String
-viewGraph =
-    toDot >> DL.toString
-
-
-toDot : Dict String (List String) -> DL.Dot
-toDot graph =
-    let
-        edgeStmts =
-            Dict.toList graph
-                |> List.map
-                    (\( node, deps ) ->
-                        let
-                            edges =
-                                deps
-                                    |> List.filter (\dep -> Dict.member dep graph)
-                                    |> List.map (toNodeId >> DL.EdgeNode)
-                        in
-                        List.map
-                            (\edge -> DL.EdgeStmtNode (toNodeId node) edge [] [])
-                            edges
-                    )
-                |> List.concat
-    in
-    DL.Dot DL.Digraph
-        Nothing
-        (DL.LooseAttr (DL.Attr (DL.ID "rankdir") (DL.ID "LR"))
-            :: edgeStmts
-        )
-
-
-toNodeId : String -> DL.NodeId
-toNodeId id =
-    DL.NodeId (DL.ID id) Nothing
 
 
 subscriptions : Model -> Sub Msg
