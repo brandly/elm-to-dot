@@ -1,5 +1,8 @@
 module Main exposing (..)
 
+import Cli.Option as Option
+import Cli.OptionsParser as OptionsParser
+import Cli.Program as Program
 import Elm.Parser
 import Elm.RawFile as RawFile
 import Elm.Syntax.Node as Node
@@ -21,7 +24,6 @@ type alias CrawlingState =
     { base : String
     , graph : Graph
     , pending : List String
-    , includeExternal : Bool
     }
 
 
@@ -40,11 +42,19 @@ mapPending map m =
     { m | pending = map m.pending }
 
 
-main : Program String Model Msg
+type alias CliOptions =
+    { includeExternal : Bool
+    , entryFile : String
+    }
+
+
+main : Program.StatefulProgram Model Msg CliOptions {}
 main =
-    Platform.worker
-        { init =
-            \entryFile ->
+    Program.stateful
+        { printAndExitFailure = E.string >> Native.Log.line
+        , printAndExitSuccess = E.string >> Native.Log.line
+        , init =
+            \flags { entryFile } ->
                 let
                     splits =
                         String.split "/" entryFile
@@ -58,17 +68,29 @@ main =
                     { base = base
                     , graph = Graph.empty
                     , pending = [ entryFile ]
-                    , includeExternal = False
                     }
                 , Native.File.readFile (E.string entryFile)
                 )
-        , update = update
+        , config = programConfig
         , subscriptions = subscriptions
+        , update = update
         }
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
+programConfig : Program.Config CliOptions
+programConfig =
+    Program.config
+        |> Program.add
+            (OptionsParser.build CliOptions
+                |> OptionsParser.with
+                    (Option.flag "include-external")
+                |> OptionsParser.with
+                    (Option.requiredPositionalArg "entry file")
+            )
+
+
+update : CliOptions -> Msg -> Model -> ( Model, Cmd Msg )
+update options msg model =
     let
         finishCrawling ( m, cmd ) =
             case m of
@@ -117,7 +139,7 @@ update msg model =
                     updateGraph =
                         -- dead end because we naively look for local file paths, even for installed modules
                         -- treat it like a dead end but still insert it into the graph
-                        if state.includeExternal then
+                        if options.includeExternal then
                             mapGraph (Graph.insert (fileToModule state.base path) [])
 
                         else
