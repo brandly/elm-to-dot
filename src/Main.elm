@@ -1,5 +1,8 @@
 module Main exposing (..)
 
+import Cli.Option as Option
+import Cli.OptionsParser as OptionsParser
+import Cli.Program as Program
 import Elm.Parser
 import Elm.RawFile as RawFile
 import Elm.Syntax.Node as Node
@@ -39,11 +42,19 @@ mapPending map m =
     { m | pending = map m.pending }
 
 
-main : Program String Model Msg
+type alias CliOptions =
+    { includeExternal : Bool
+    , entryFile : String
+    }
+
+
+main : Program.StatefulProgram Model Msg CliOptions {}
 main =
-    Platform.worker
-        { init =
-            \entryFile ->
+    Program.stateful
+        { printAndExitFailure = E.string >> Native.Log.line
+        , printAndExitSuccess = E.string >> Native.Log.line
+        , init =
+            \flags { entryFile } ->
                 let
                     splits =
                         String.split "/" entryFile
@@ -53,16 +64,33 @@ main =
                         List.take (List.length splits - 1) splits
                             |> String.join "/"
                 in
-                ( Crawling { base = base, graph = Graph.empty, pending = [ entryFile ] }
+                ( Crawling
+                    { base = base
+                    , graph = Graph.empty
+                    , pending = [ entryFile ]
+                    }
                 , Native.File.readFile (E.string entryFile)
                 )
-        , update = update
+        , config = programConfig
         , subscriptions = subscriptions
+        , update = update
         }
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
+programConfig : Program.Config CliOptions
+programConfig =
+    Program.config
+        |> Program.add
+            (OptionsParser.build CliOptions
+                |> OptionsParser.with
+                    (Option.flag "include-external")
+                |> OptionsParser.with
+                    (Option.requiredPositionalArg "entry file")
+            )
+
+
+update : CliOptions -> Msg -> Model -> ( Model, Cmd Msg )
+update options msg model =
     let
         finishCrawling ( m, cmd ) =
             case m of
@@ -106,13 +134,20 @@ update msg model =
                     ( model, Native.Log.line <| E.string ("failed to parse: " ++ Parser.deadEndsToString e) )
 
         ( Crawling state, FileError (Ok { code, message, path }) ) ->
-            -- dead end because we naively look for local file paths, even for installed modules
-            -- treat it like a dead end but still insert it into the graph
             if code == "ENOENT" then
                 let
+                    updateGraph =
+                        -- dead end because we naively look for local file paths, even for installed modules
+                        -- treat it like a dead end but still insert it into the graph
+                        if options.includeExternal then
+                            mapGraph (Graph.insert (fileToModule state.base path) [])
+
+                        else
+                            identity
+
                     state_ =
                         state
-                            |> mapGraph (Graph.insert (fileToModule state.base path) [])
+                            |> updateGraph
                             |> mapPending (List.filter ((/=) path))
                 in
                 finishCrawling
