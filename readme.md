@@ -1,14 +1,17 @@
 # elm-to-dot
 
-Crawl Elm dependencies and produce a dependency graph in [DOT](<https://en.wikipedia.org/wiki/DOT_(graph_description_language)>).
+Crawl an Elm project and produce a dependency graph in [DOT](<https://en.wikipedia.org/wiki/DOT_(graph_description_language)>).
 
 ```shell
 $ npm install --global elm-to-dot
-$ elm-to-dot src/Main.elm
+$ elm-to-dot --include-external src/Main.elm
 digraph {
     rankdir=LR
     "Graph" -> Dict
     "Graph" -> DotLang
+    Main -> "Cli.Option"
+    Main -> "Cli.OptionsParser"
+    Main -> "Cli.Program"
     Main -> "Elm.Parser"
     Main -> "Elm.RawFile"
     Main -> "Elm.Syntax.Node"
@@ -24,6 +27,10 @@ digraph {
     "Native.Log" -> "Json.Encode"
 }
 ```
+
+DOT can be fed into [Graphviz](https://www.graphviz.org/) to generate an SVG. I used [this browser-based version](http://viz-js.com/) to view a dependency graph of this repo.
+
+![dependencies](https://github.com/brandly/elm-to-dot/blob/master/dependency-graph.svg)
 
 ## why?
 
@@ -38,24 +45,8 @@ $ npm install
 $ ./bin.js src/Main.elm
 digraph {
     rankdir=LR
-    "Graph" -> Dict
-    "Graph" -> DotLang
-    Main -> "Elm.Parser"
-    Main -> "Elm.RawFile"
-    Main -> "Elm.Syntax.Node"
     Main -> "Graph"
-    Main -> "Json.Decode"
-    Main -> "Json.Encode"
     Main -> "Native.File"
     Main -> "Native.Log"
-    Main -> Parser
-    Main -> Platform
-    "Native.File" -> "Json.Decode"
-    "Native.File" -> "Json.Encode"
-    "Native.Log" -> "Json.Encode"
 }
 ```
-
-DOT can be fed into [Graphviz](https://www.graphviz.org/) to generate an SVG. I used [this browser-based version](http://viz-js.com/).
-
-![dependencies](https://github.com/brandly/elm-to-dot/blob/master/dependency-graph.svg)
