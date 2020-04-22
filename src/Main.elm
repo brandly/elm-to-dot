@@ -48,23 +48,26 @@ type alias CliOptions =
     }
 
 
-main : Program.StatefulProgram Model Msg CliOptions {}
+main : Program.StatefulProgram Model Msg CliOptions { pwd : String }
 main =
     Program.stateful
         { printAndExitFailure = E.string >> Native.Log.line
         , printAndExitSuccess = E.string >> Native.Log.line
         , init =
-            \_ { entryFile } ->
+            \flags { entryFile } ->
                 let
+                    absoluteEntry =
+                        makeAbsolute flags.pwd entryFile
+
                     splits =
-                        String.split "/" entryFile
+                        String.split "/" absoluteEntry
 
                     dir : String
                     dir =
                         List.take (List.length splits - 1) splits
                             |> String.join "/"
                 in
-                ( FindingPackage { entryFile = entryFile, dir = dir }
+                ( FindingPackage { entryFile = absoluteEntry, dir = dir }
                 , Native.File.readFile (E.string (dir ++ "/elm.json"))
                 )
         , config = programConfig
@@ -234,6 +237,25 @@ getParent dir =
             String.split "/" dir
     in
     splits |> List.take (List.length splits - 1) |> String.join "/"
+
+
+makeAbsolute : String -> String -> String
+makeAbsolute pwd file =
+    case String.split "/" file of
+        ".." :: tail ->
+            makeAbsolute (getParent pwd) (String.join "/" tail)
+
+        "." :: tail ->
+            pwd ++ String.join "/" tail
+
+        "" :: _ ->
+            file
+
+        _ :: _ ->
+            pwd ++ "/" ++ file
+
+        [] ->
+            file
 
 
 subscriptions : Model -> Sub Msg
