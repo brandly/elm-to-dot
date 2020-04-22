@@ -126,8 +126,16 @@ update options msg model =
                     , Native.File.readFile (E.string entryFile)
                     )
 
-                Err _ ->
-                    ( model, Native.Log.line <| E.string "Failed to decode JSON" )
+                Err error ->
+                    ( model
+                    , (Native.Log.line << E.string)
+                        (String.join "\n"
+                            [ "Failed to decode JSON."
+                            , jsonFile.name
+                            , D.errorToString error
+                            ]
+                        )
+                    )
 
         ( FindingPackage { entryFile, dir }, FileError (Ok { code }) ) ->
             if code == "ENOENT" then
