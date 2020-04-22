@@ -84,7 +84,16 @@ programConfig =
                 |> OptionsParser.with
                     (Option.flag "include-external")
                 |> OptionsParser.with
-                    (Option.requiredPositionalArg "entry file")
+                    (Option.requiredPositionalArg "entry file"
+                        |> Option.validateMap
+                            (\file ->
+                                if String.endsWith ".elm" file then
+                                    Ok file
+
+                                else
+                                    Err <| "Expected an Elm file but received \"" ++ file ++ "\""
+                            )
+                    )
             )
 
 
