@@ -145,8 +145,13 @@ update options msg model =
                                 |> List.concat
 
                         withExternal =
-                            if options.includeExternal && (not <| Graph.includes name graph) then
-                                mapGraph (\graph_ -> List.foldl (\dep g -> Graph.insert dep [] g) graph_ dependencies)
+                            if options.includeExternal then
+                                mapGraph
+                                    (\graph_ ->
+                                        List.foldl (\dependency g -> Graph.insert dependency [] g)
+                                            graph_
+                                            dependencies
+                                    )
 
                             else
                                 identity
