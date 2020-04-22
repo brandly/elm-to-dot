@@ -217,14 +217,9 @@ parseModules elm =
                 { name = (RawFile.moduleName >> String.join ".") v
                 , dependencies =
                     RawFile.imports v
-                        |> List.map (.moduleName >> Node.value >> importToModule)
+                        |> List.map (.moduleName >> Node.value >> String.join ".")
                 }
             )
-
-
-importToModule : List String -> String
-importToModule =
-    String.join "."
 
 
 moduleToFile : String -> String -> String
