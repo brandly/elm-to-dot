@@ -12,7 +12,6 @@ import Json.Encode as E
 import Native.File exposing (File, NativeError)
 import Native.Log
 import Parser
-import Platform
 
 
 type Msg
@@ -21,14 +20,15 @@ type Msg
 
 
 type alias CrawlingState =
-    { base : String
+    { sourceDirs : List String
     , graph : Graph
     , pending : List String
     }
 
 
 type Model
-    = Crawling CrawlingState
+    = FindingPackage { entryFile : String, dir : String }
+    | Crawling CrawlingState
     | Ready Graph
 
 
@@ -54,22 +54,18 @@ main =
         { printAndExitFailure = E.string >> Native.Log.line
         , printAndExitSuccess = E.string >> Native.Log.line
         , init =
-            \flags { entryFile } ->
+            \_ { entryFile } ->
                 let
                     splits =
                         String.split "/" entryFile
 
-                    base : String
-                    base =
+                    dir : String
+                    dir =
                         List.take (List.length splits - 1) splits
                             |> String.join "/"
                 in
-                ( Crawling
-                    { base = base
-                    , graph = Graph.empty
-                    , pending = [ entryFile ]
-                    }
-                , Native.File.readFile (E.string entryFile)
+                ( FindingPackage { entryFile = entryFile, dir = dir }
+                , Native.File.readFile (E.string (dir ++ "/elm.json"))
                 )
         , config = programConfig
         , subscriptions = subscriptions
@@ -107,27 +103,64 @@ update options msg model =
                     ( m, cmd )
     in
     case ( model, msg ) of
-        ( Crawling ({ base, graph } as state), ReadFileSuccess (Ok { name, contents }) ) ->
-            case parseModules contents of
-                Ok modules ->
-                    let
-                        files =
-                            modules |> List.map (moduleToFile base)
+        ( FindingPackage { entryFile, dir }, ReadFileSuccess (Ok jsonFile) ) ->
+            case D.decodeString elmJsonDecoder jsonFile.contents of
+                Ok { sourceDirs } ->
+                    ( Crawling
+                        { -- TODO: more sophisticated join, handle relative paths
+                          sourceDirs = List.map (\src -> dir ++ "/" ++ src) sourceDirs
+                        , graph = Graph.empty
+                        , pending = [ entryFile ]
+                        }
+                    , Native.File.readFile (E.string entryFile)
+                    )
 
+                Err _ ->
+                    ( model, Native.Log.line <| E.string "Failed to decode JSON" )
+
+        ( FindingPackage { entryFile, dir }, FileError (Ok { code }) ) ->
+            if code == "ENOENT" then
+                let
+                    parent =
+                        getParent dir
+                in
+                ( FindingPackage { entryFile = entryFile, dir = parent }
+                , Native.File.readFile (E.string (parent ++ "/elm.json"))
+                )
+
+            else
+                ( model, Native.Log.line <| E.string (code ++ " " ++ dir) )
+
+        ( Crawling ({ sourceDirs, graph } as state), ReadFileSuccess (Ok file) ) ->
+            case parseModules file.contents of
+                Ok { name, dependencies } ->
+                    let
                         filesToFetch =
-                            List.filter (\file -> not <| Graph.includes (fileToModule base file) graph) files
+                            dependencies
+                                |> List.filter (\dep -> not <| Graph.includes dep graph)
+                                |> List.map
+                                    (\mod ->
+                                        sourceDirs |> List.map (\dir -> moduleToFile dir mod)
+                                    )
+                                |> List.concat
+
+                        withExternal =
+                            if options.includeExternal && (not <| Graph.includes name graph) then
+                                mapGraph (\graph_ -> List.foldl (\dep g -> Graph.insert dep [] g) graph_ dependencies)
+
+                            else
+                                identity
 
                         state_ =
                             state
-                                |> mapGraph (Graph.insert (fileToModule base name) modules)
-                                |> mapPending (\p -> List.filter ((/=) name) p ++ filesToFetch)
+                                |> withExternal
+                                |> mapGraph (Graph.insert name dependencies)
+                                |> mapPending (\p -> List.filter ((/=) file.name) p ++ filesToFetch)
                     in
                     finishCrawling
                         ( Crawling state_
                         , Cmd.batch
-                            (filesToFetch
-                                |> List.map (E.string >> Native.File.readFile)
-                            )
+                            (List.map (E.string >> Native.File.readFile) filesToFetch)
                         )
 
                 Err e ->
@@ -136,19 +169,9 @@ update options msg model =
         ( Crawling state, FileError (Ok { code, message, path }) ) ->
             if code == "ENOENT" then
                 let
-                    updateGraph =
-                        -- dead end because we naively look for local file paths, even for installed modules
-                        -- treat it like a dead end but still insert it into the graph
-                        if options.includeExternal then
-                            mapGraph (Graph.insert (fileToModule state.base path) [])
-
-                        else
-                            identity
-
                     state_ =
-                        state
-                            |> updateGraph
-                            |> mapPending (List.filter ((/=) path))
+                        mapPending (List.filter ((/=) path))
+                            state
                 in
                 finishCrawling
                     ( Crawling state_, Cmd.none )
@@ -160,13 +183,37 @@ update options msg model =
             ( model, Native.Log.line <| E.string "unexpected msg" )
 
 
-parseModules : String -> Result (List Parser.DeadEnd) (List String)
+type alias ElmJson =
+    { type_ : String
+    , sourceDirs : List String
+    , elmVersion : String
+    }
+
+
+elmJsonDecoder : D.Decoder ElmJson
+elmJsonDecoder =
+    D.map3 ElmJson
+        (D.at [ "type" ] D.string)
+        (D.at [ "source-directories" ] (D.list D.string))
+        (D.at [ "elm-version" ] D.string)
+
+
+type alias ElmModule =
+    { name : String
+    , dependencies : List String
+    }
+
+
+parseModules : String -> Result (List Parser.DeadEnd) ElmModule
 parseModules elm =
     Elm.Parser.parse elm
         |> Result.map
             (\v ->
-                RawFile.imports v
-                    |> List.map (.moduleName >> Node.value >> importToModule)
+                { name = (RawFile.moduleName >> String.join ".") v
+                , dependencies =
+                    RawFile.imports v
+                        |> List.map (.moduleName >> Node.value >> importToModule)
+                }
             )
 
 
@@ -180,29 +227,28 @@ moduleToFile base mod =
     ((base :: String.split "." mod) |> String.join "/") ++ ".elm"
 
 
-fileToModule : String -> String -> String
-fileToModule base file =
-    file
-        -- +1 for the /
-        |> String.dropLeft (String.length base + 1)
-        |> String.dropRight (String.length ".elm")
-        |> String.split "/"
-        |> String.join "."
+getParent : String -> String
+getParent dir =
+    let
+        splits =
+            String.split "/" dir
+    in
+    splits |> List.take (List.length splits - 1) |> String.join "/"
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     case model of
-        Crawling _ ->
+        Ready _ ->
+            Sub.none
+
+        _ ->
             Sub.batch
                 [ Native.File.readFileSuccess
                     (Native.File.decodeReadFileSuccess >> ReadFileSuccess)
                 , Native.File.readFileError
                     (Native.File.decodeNativeError >> FileError)
                 ]
-
-        _ ->
-            Sub.none
 
 
 deadEndsToString : List Parser.DeadEnd -> String
