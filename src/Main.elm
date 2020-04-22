@@ -110,8 +110,7 @@ update options msg model =
             case D.decodeString elmJsonDecoder jsonFile.contents of
                 Ok { sourceDirs } ->
                     ( Crawling
-                        { -- TODO: more sophisticated join, handle relative paths
-                          sourceDirs = List.map (\src -> dir ++ "/" ++ src) sourceDirs
+                        { sourceDirs = List.map (\src -> makeAbsolute dir src) sourceDirs
                         , graph = Graph.empty
                         , pending = [ entryFile ]
                         }
