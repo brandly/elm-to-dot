@@ -143,9 +143,13 @@ update options msg model =
                     parent =
                         getParent dir
                 in
-                ( FindingPackage { entryFile = entryFile, dir = parent }
-                , Native.File.readFile (E.string (parent ++ "/elm.json"))
-                )
+                if parent == "" then
+                    ( model, Native.Log.line <| E.string "No elm.json file found." )
+
+                else
+                    ( FindingPackage { entryFile = entryFile, dir = parent }
+                    , Native.File.readFile (E.string (parent ++ "/elm.json"))
+                    )
 
             else
                 ( model, Native.Log.line <| E.string (code ++ " " ++ dir) )
