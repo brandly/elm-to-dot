@@ -31,13 +31,9 @@ digraph {
     Main -> "Elm.Syntax.Node"
     Main -> "Graph"
     Main -> "Json.Decode"
-    Main -> "Json.Encode"
     Main -> "Native.File"
     Main -> "Native.Log"
     Main -> Parser
-    "Native.File" -> "Json.Decode"
-    "Native.File" -> "Json.Encode"
-    "Native.Log" -> "Json.Encode"
 }
 ```
 
