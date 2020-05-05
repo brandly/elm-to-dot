@@ -201,7 +201,7 @@ update options msg model =
                     )
 
         ( Crawling state, FileError { code, message, path } ) ->
-            if code == "ENOENT" then
+            if code == "ENOENT" && state.graph /= Graph.empty then
                 let
                     state_ =
                         mapPending (List.filter ((/=) path))
@@ -211,7 +211,7 @@ update options msg model =
                     ( Crawling state_, Cmd.none )
 
             else
-                ( model, Native.Log.line ("Error: " ++ message) )
+                ( model, Native.Log.line message )
 
         _ ->
             ( model, Native.Log.line "unexpected msg" )
