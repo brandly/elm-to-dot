@@ -1,6 +1,6 @@
 {
   "name": "elm-to-dot",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "license": "MIT",
   "scripts": {
     "build": "elm make src/Main.elm --optimize --output dist/index.js",
