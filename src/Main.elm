@@ -7,16 +7,22 @@ import Elm.Parser
 import Elm.RawFile as RawFile
 import Elm.Syntax.Node as Node
 import Graph exposing (Graph)
-import Json.Decode as D
-import Json.Encode as E
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Native.File exposing (File, NativeError)
 import Native.Log
 import Parser
 
 
 type Msg
-    = ReadFileSuccess (Result D.Error File)
-    | FileError (Result D.Error NativeError)
+    = ReadFileSuccess (Result Decode.Error File)
+    | FileError (Result Decode.Error NativeError)
+
+
+type Model
+    = FindingPackage { entryFile : String, dir : String }
+    | Crawling CrawlingState
+    | Ready Graph
 
 
 type alias CrawlingState =
@@ -26,20 +32,14 @@ type alias CrawlingState =
     }
 
 
-type Model
-    = FindingPackage { entryFile : String, dir : String }
-    | Crawling CrawlingState
-    | Ready Graph
-
-
 mapGraph : (Graph -> Graph) -> CrawlingState -> CrawlingState
-mapGraph map m =
-    { m | graph = map m.graph }
+mapGraph map state =
+    { state | graph = map state.graph }
 
 
 mapPending : (List String -> List String) -> CrawlingState -> CrawlingState
-mapPending map m =
-    { m | pending = map m.pending }
+mapPending map state =
+    { state | pending = map state.pending }
 
 
 type alias CliOptions =
@@ -51,8 +51,8 @@ type alias CliOptions =
 main : Program.StatefulProgram Model Msg CliOptions { pwd : String }
 main =
     Program.stateful
-        { printAndExitFailure = E.string >> Native.Log.line
-        , printAndExitSuccess = E.string >> Native.Log.line
+        { printAndExitFailure = Encode.string >> Native.Log.line
+        , printAndExitSuccess = Encode.string >> Native.Log.line
         , init =
             \flags { entryFile } ->
                 let
@@ -68,7 +68,7 @@ main =
                             |> String.join "/"
                 in
                 ( FindingPackage { entryFile = absoluteEntry, dir = dir }
-                , Native.File.readFile (E.string (dir ++ "/elm.json"))
+                , Native.File.readFile (Encode.string (dir ++ "/elm.json"))
                 )
         , config = programConfig
         , subscriptions = subscriptions
@@ -100,39 +100,41 @@ programConfig =
 update : CliOptions -> Msg -> Model -> ( Model, Cmd Msg )
 update options msg model =
     let
-        finishCrawling ( m, cmd ) =
-            case m of
+        finishCrawling ( model_, cmd ) =
+            case model_ of
                 Crawling s ->
                     if List.length s.pending > 0 then
-                        ( m, cmd )
+                        ( model_, cmd )
 
                     else
                         ( Ready s.graph
-                        , Native.Log.line (E.string (Graph.toString s.graph))
+                        , Native.Log.line (Encode.string (Graph.toString s.graph))
                         )
 
                 _ ->
-                    ( m, cmd )
+                    ( model_, cmd )
     in
     case ( model, msg ) of
         ( FindingPackage { entryFile, dir }, ReadFileSuccess (Ok jsonFile) ) ->
-            case D.decodeString elmJsonDecoder jsonFile.contents of
+            case Decode.decodeString elmJsonDecoder jsonFile.contents of
                 Ok { sourceDirs } ->
                     ( Crawling
-                        { sourceDirs = List.map (\src -> makeAbsolute dir src) sourceDirs
+                        { sourceDirs =
+                            List.map (makeAbsolute dir)
+                                sourceDirs
                         , graph = Graph.empty
                         , pending = [ entryFile ]
                         }
-                    , Native.File.readFile (E.string entryFile)
+                    , Native.File.readFile (Encode.string entryFile)
                     )
 
                 Err error ->
                     ( model
-                    , (Native.Log.line << E.string)
+                    , (Native.Log.line << Encode.string)
                         (String.join "\n"
                             [ "Failed to decode JSON."
                             , jsonFile.name
-                            , D.errorToString error
+                            , Decode.errorToString error
                             ]
                         )
                     )
@@ -144,15 +146,15 @@ update options msg model =
                         getParent dir
                 in
                 if parent == "" then
-                    ( model, Native.Log.line <| E.string "No elm.json file found." )
+                    ( model, Native.Log.line <| Encode.string "No elm.json file found." )
 
                 else
                     ( FindingPackage { entryFile = entryFile, dir = parent }
-                    , Native.File.readFile (E.string (parent ++ "/elm.json"))
+                    , Native.File.readFile (Encode.string (parent ++ "/elm.json"))
                     )
 
             else
-                ( model, Native.Log.line <| E.string (code ++ " " ++ dir) )
+                ( model, Native.Log.line <| Encode.string (code ++ " " ++ dir) )
 
         ( Crawling ({ sourceDirs, graph } as state), ReadFileSuccess (Ok file) ) ->
             case parseModules file.contents of
@@ -183,16 +185,22 @@ update options msg model =
                             state
                                 |> withExternal
                                 |> mapGraph (Graph.insert name dependencies)
-                                |> mapPending (\p -> List.filter ((/=) file.name) p ++ filesToFetch)
+                                |> mapPending
+                                    (\pending ->
+                                        List.filter ((/=) file.name) pending ++ filesToFetch
+                                    )
                     in
                     finishCrawling
                         ( Crawling state_
-                        , Cmd.batch
-                            (List.map (E.string >> Native.File.readFile) filesToFetch)
+                        , Cmd.batch <|
+                            List.map (Encode.string >> Native.File.readFile) filesToFetch
                         )
 
                 Err e ->
-                    ( model, Native.Log.line <| E.string ("failed to parse: " ++ deadEndsToString e) )
+                    ( model
+                    , Native.Log.line <|
+                        Encode.string ("failed to parse: " ++ deadEndsToString e)
+                    )
 
         ( Crawling state, FileError (Ok { code, message, path }) ) ->
             if code == "ENOENT" then
@@ -205,10 +213,10 @@ update options msg model =
                     ( Crawling state_, Cmd.none )
 
             else
-                ( model, Native.Log.line <| E.string ("Error: " ++ message) )
+                ( model, Native.Log.line <| Encode.string ("Error: " ++ message) )
 
         _ ->
-            ( model, Native.Log.line <| E.string "unexpected msg" )
+            ( model, Native.Log.line <| Encode.string "unexpected msg" )
 
 
 type alias ElmJson =
@@ -218,12 +226,12 @@ type alias ElmJson =
     }
 
 
-elmJsonDecoder : D.Decoder ElmJson
+elmJsonDecoder : Decode.Decoder ElmJson
 elmJsonDecoder =
-    D.map3 ElmJson
-        (D.at [ "type" ] D.string)
-        (D.at [ "source-directories" ] (D.list D.string))
-        (D.at [ "elm-version" ] D.string)
+    Decode.map3 ElmJson
+        (Decode.at [ "type" ] Decode.string)
+        (Decode.at [ "source-directories" ] (Decode.list Decode.string))
+        (Decode.at [ "elm-version" ] Decode.string)
 
 
 type alias ElmModule =
