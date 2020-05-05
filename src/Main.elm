@@ -8,15 +8,14 @@ import Elm.RawFile as RawFile
 import Elm.Syntax.Node as Node
 import Graph exposing (Graph)
 import Json.Decode as Decode
-import Json.Encode as Encode
 import Native.File exposing (File, NativeError)
 import Native.Log
 import Parser
 
 
 type Msg
-    = ReadFileSuccess (Result Decode.Error File)
-    | FileError (Result Decode.Error NativeError)
+    = ReadFileSuccess File
+    | FileError NativeError
 
 
 type Model
@@ -51,8 +50,8 @@ type alias CliOptions =
 main : Program.StatefulProgram Model Msg CliOptions { pwd : String }
 main =
     Program.stateful
-        { printAndExitFailure = Encode.string >> Native.Log.line
-        , printAndExitSuccess = Encode.string >> Native.Log.line
+        { printAndExitFailure = Native.Log.line
+        , printAndExitSuccess = Native.Log.line
         , init =
             \flags { entryFile } ->
                 let
@@ -68,7 +67,7 @@ main =
                             |> String.join "/"
                 in
                 ( FindingPackage { entryFile = absoluteEntry, dir = dir }
-                , Native.File.readFile (Encode.string (dir ++ "/elm.json"))
+                , Native.File.readFile (dir ++ "/elm.json")
                 )
         , config = programConfig
         , subscriptions = subscriptions
@@ -108,14 +107,14 @@ update options msg model =
 
                     else
                         ( Ready s.graph
-                        , Native.Log.line (Encode.string (Graph.toString s.graph))
+                        , Native.Log.line (Graph.toString s.graph)
                         )
 
                 _ ->
                     ( model_, cmd )
     in
     case ( model, msg ) of
-        ( FindingPackage { entryFile, dir }, ReadFileSuccess (Ok jsonFile) ) ->
+        ( FindingPackage { entryFile, dir }, ReadFileSuccess jsonFile ) ->
             case Decode.decodeString elmJsonDecoder jsonFile.contents of
                 Ok { sourceDirs } ->
                     ( Crawling
@@ -125,12 +124,12 @@ update options msg model =
                         , graph = Graph.empty
                         , pending = [ entryFile ]
                         }
-                    , Native.File.readFile (Encode.string entryFile)
+                    , Native.File.readFile entryFile
                     )
 
                 Err error ->
                     ( model
-                    , (Native.Log.line << Encode.string)
+                    , Native.Log.line
                         (String.join "\n"
                             [ "Failed to decode JSON."
                             , jsonFile.name
@@ -139,24 +138,24 @@ update options msg model =
                         )
                     )
 
-        ( FindingPackage { entryFile, dir }, FileError (Ok { code }) ) ->
+        ( FindingPackage { entryFile, dir }, FileError { code } ) ->
             if code == "ENOENT" then
                 let
                     parent =
                         getParent dir
                 in
                 if parent == "" then
-                    ( model, Native.Log.line <| Encode.string "No elm.json file found." )
+                    ( model, Native.Log.line "No elm.json file found." )
 
                 else
                     ( FindingPackage { entryFile = entryFile, dir = parent }
-                    , Native.File.readFile (Encode.string (parent ++ "/elm.json"))
+                    , Native.File.readFile (parent ++ "/elm.json")
                     )
 
             else
-                ( model, Native.Log.line <| Encode.string (code ++ " " ++ dir) )
+                ( model, Native.Log.line (code ++ " " ++ dir) )
 
-        ( Crawling ({ sourceDirs, graph } as state), ReadFileSuccess (Ok file) ) ->
+        ( Crawling ({ sourceDirs, graph } as state), ReadFileSuccess file ) ->
             case parseModules file.contents of
                 Ok { name, dependencies } ->
                     let
@@ -193,16 +192,15 @@ update options msg model =
                     finishCrawling
                         ( Crawling state_
                         , Cmd.batch <|
-                            List.map (Encode.string >> Native.File.readFile) filesToFetch
+                            List.map Native.File.readFile filesToFetch
                         )
 
                 Err e ->
                     ( model
-                    , Native.Log.line <|
-                        Encode.string ("failed to parse: " ++ deadEndsToString e)
+                    , Native.Log.line ("failed to parse: " ++ deadEndsToString e)
                     )
 
-        ( Crawling state, FileError (Ok { code, message, path }) ) ->
+        ( Crawling state, FileError { code, message, path } ) ->
             if code == "ENOENT" then
                 let
                     state_ =
@@ -213,10 +211,10 @@ update options msg model =
                     ( Crawling state_, Cmd.none )
 
             else
-                ( model, Native.Log.line <| Encode.string ("Error: " ++ message) )
+                ( model, Native.Log.line ("Error: " ++ message) )
 
         _ ->
-            ( model, Native.Log.line <| Encode.string "unexpected msg" )
+            ( model, Native.Log.line "unexpected msg" )
 
 
 type alias ElmJson =
@@ -294,10 +292,8 @@ subscriptions model =
 
         _ ->
             Sub.batch
-                [ Native.File.readFileSuccess
-                    (Native.File.decodeReadFileSuccess >> ReadFileSuccess)
-                , Native.File.readFileError
-                    (Native.File.decodeNativeError >> FileError)
+                [ Native.File.readFileSuccess ReadFileSuccess
+                , Native.File.readFileError FileError
                 ]
 
 
