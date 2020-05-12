@@ -50,7 +50,7 @@ type alias CliOptions =
 main : Program.StatefulProgram Model Msg CliOptions { pwd : String }
 main =
     Program.stateful
-        { printAndExitFailure = Native.Log.line
+        { printAndExitFailure = Native.Log.exitWithError
         , printAndExitSuccess = Native.Log.line
         , init =
             \flags { entryFile } ->
@@ -129,7 +129,7 @@ update options msg model =
 
                 Err error ->
                     ( model
-                    , Native.Log.line
+                    , Native.Log.exitWithError
                         (String.join "\n"
                             [ "Failed to decode JSON."
                             , jsonFile.name
@@ -145,7 +145,7 @@ update options msg model =
                         getParent dir
                 in
                 if parent == "" then
-                    ( model, Native.Log.line "No elm.json file found." )
+                    ( model, Native.Log.exitWithError "No elm.json file found." )
 
                 else
                     ( FindingPackage { entryFile = entryFile, dir = parent }
@@ -153,7 +153,7 @@ update options msg model =
                     )
 
             else
-                ( model, Native.Log.line (code ++ " " ++ dir) )
+                ( model, Native.Log.exitWithError (code ++ " " ++ dir) )
 
         ( Crawling ({ sourceDirs, graph } as state), ReadFileSuccess file ) ->
             case parseModules file.contents of
@@ -197,7 +197,7 @@ update options msg model =
 
                 Err e ->
                     ( model
-                    , Native.Log.line ("failed to parse: " ++ deadEndsToString e)
+                    , Native.Log.exitWithError ("failed to parse: " ++ deadEndsToString e)
                     )
 
         ( Crawling state, FileError { code, message, path } ) ->
@@ -211,10 +211,10 @@ update options msg model =
                     ( Crawling state_, Cmd.none )
 
             else
-                ( model, Native.Log.line message )
+                ( model, Native.Log.exitWithError message )
 
         _ ->
-            ( model, Native.Log.line "unexpected msg" )
+            ( model, Native.Log.exitWithError "unexpected msg" )
 
 
 type alias ElmJson =

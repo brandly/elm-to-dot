@@ -22,4 +22,9 @@ module.exports = app => {
   app.ports.line.subscribe(line => {
     console.log(line)
   })
+
+  app.ports.exitWithError.subscribe(error => {
+    console.error(error)
+    process.exit(1)
+  })
 }
