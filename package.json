@@ -4,8 +4,7 @@
   "license": "MIT",
   "scripts": {
     "build": "elm make src/Main.elm --optimize --output dist/index.js",
-    "cli": "npm run build && node index.js",
-    "prepublish": "npm run build && npm run minify",
+    "prepublishOnly": "npm run build && npm run minify",
     "minify": "uglifyjs --compress --mangle --output dist/index.js -- dist/index.js"
   },
   "devDependencies": {

@@ -63,6 +63,7 @@ I wondered what it would be like to thinly wrap Node.js APIs in `ports`, allowin
 
 ```shell
 $ npm install
+$ npm run build
 $ ./bin.js src/Main.elm
 digraph {
     rankdir=LR
