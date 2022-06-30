@@ -226,9 +226,14 @@ type alias ElmJson =
 
 elmJsonDecoder : Decode.Decoder ElmJson
 elmJsonDecoder =
+    let
+        decodeSourceDirectories =
+            Decode.maybe (Decode.at [ "source-directories" ] (Decode.list Decode.string))
+                |> Decode.andThen (\sourceDirs -> Decode.succeed (Maybe.withDefault [ "src" ] sourceDirs))
+    in
     Decode.map3 ElmJson
         (Decode.at [ "type" ] Decode.string)
-        (Decode.at [ "source-directories" ] (Decode.list Decode.string))
+        decodeSourceDirectories
         (Decode.at [ "elm-version" ] Decode.string)
 
 
