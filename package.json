@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "elm": "0.19.1-5",
-    "uglify-js": "3.16.1"
+    "uglify-js": "3.17.4"
   },
   "files": [
     "*.js",
