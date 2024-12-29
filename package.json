@@ -8,8 +8,8 @@
     "minify": "uglifyjs --compress --mangle --output dist/index.js -- dist/index.js"
   },
   "devDependencies": {
-    "elm": "0.19.1-5",
-    "uglify-js": "3.17.4"
+    "elm": "0.19.1-6",
+    "uglify-js": "3.19.3"
   },
   "files": [
     "*.js",
