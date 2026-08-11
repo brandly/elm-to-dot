@@ -8,6 +8,7 @@ import Elm.RawFile as RawFile
 import Elm.Syntax.Node as Node
 import Graph exposing (Graph)
 import Json.Decode as Decode
+import List.Extra
 import Native.File exposing (File, NativeError)
 import Native.Log
 import Parser
@@ -167,6 +168,7 @@ update options msg model =
                                         sourceDirs |> List.map (\dir -> moduleToFile dir mod)
                                     )
                                 |> List.concat
+                                |> List.filter (\f -> not (List.member f state.pending))
 
                         withExternal =
                             if options.includeExternal then
@@ -252,6 +254,7 @@ parseModules elm =
                 , dependencies =
                     RawFile.imports v
                         |> List.map (.moduleName >> Node.value >> String.join ".")
+                        |> List.Extra.unique
                 }
             )
 
