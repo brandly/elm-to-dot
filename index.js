@@ -3,7 +3,7 @@ const { Elm } = require('./dist')
 
 const app = Elm.Main.init({
   flags: {
-    pwd: process.env.PWD,
+    pwd: process.cwd(),
     argv: process.argv,
     versionMessage: require('./package.json').version
   }
