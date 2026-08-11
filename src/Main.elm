@@ -322,7 +322,7 @@ deadEndsToString deadEnds =
             in
             case deadEnd.problem of
                 Parser.Expecting str ->
-                    "Expecting " ++ str ++ "at " ++ position
+                    "Expecting " ++ str ++ " at " ++ position
 
                 Parser.ExpectingInt ->
                     "ExpectingInt at " ++ position
@@ -349,7 +349,7 @@ deadEndsToString deadEnds =
                     "ExpectingSymbol " ++ str ++ " at " ++ position
 
                 Parser.ExpectingKeyword str ->
-                    "ExpectingKeyword " ++ str ++ "at " ++ position
+                    "ExpectingKeyword " ++ str ++ " at " ++ position
 
                 Parser.ExpectingEnd ->
                     "ExpectingEnd at " ++ position
@@ -363,4 +363,4 @@ deadEndsToString deadEnds =
                 Parser.BadRepeat ->
                     "BadRepeat at " ++ position
     in
-    List.foldl (++) "" (List.map deadEndToString deadEnds)
+    String.concat (List.map deadEndToString deadEnds)
