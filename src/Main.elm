@@ -227,9 +227,21 @@ type alias ElmJson =
 elmJsonDecoder : Decode.Decoder ElmJson
 elmJsonDecoder =
     let
+        -- A missing "source-directories" field defaults to [ "src" ]
+        -- (package-style elm.json has no such field), but a present field
+        -- must decode strictly so a malformed value fails loudly instead
+        -- of silently falling back to the default.
         decodeSourceDirectories =
-            Decode.maybe (Decode.at [ "source-directories" ] (Decode.list Decode.string))
-                |> Decode.andThen (\sourceDirs -> Decode.succeed (Maybe.withDefault [ "src" ] sourceDirs))
+            Decode.maybe (Decode.field "source-directories" Decode.value)
+                |> Decode.andThen
+                    (\maybeValue ->
+                        case maybeValue of
+                            Nothing ->
+                                Decode.succeed [ "src" ]
+
+                            Just _ ->
+                                Decode.field "source-directories" (Decode.list Decode.string)
+                    )
     in
     Decode.map3 ElmJson
         (Decode.at [ "type" ] Decode.string)
