@@ -273,11 +273,17 @@ getParent dir =
 makeAbsolute : String -> String -> String
 makeAbsolute pwd file =
     case String.split "/" file of
+        [ "" ] ->
+            pwd
+
         ".." :: tail ->
             makeAbsolute (getParent pwd) (String.join "/" tail)
 
+        [ "." ] ->
+            pwd
+
         "." :: tail ->
-            pwd ++ String.join "/" tail
+            pwd ++ "/" ++ String.join "/" tail
 
         "" :: _ ->
             file
