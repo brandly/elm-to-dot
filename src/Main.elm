@@ -295,8 +295,8 @@ makeAbsolute pwd file =
             file
 
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions : CliOptions -> Model -> Sub Msg
+subscriptions _ model =
     case model of
         Ready _ ->
             Sub.none
