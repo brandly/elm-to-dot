@@ -3,12 +3,14 @@
   "version": "0.4.4",
   "license": "MIT",
   "scripts": {
+    "test": "elm-test",
     "build": "elm make src/Main.elm --optimize --output dist/index.js",
     "prepublishOnly": "npm run build && npm run minify",
     "minify": "uglifyjs --compress --mangle --output dist/index.js -- dist/index.js"
   },
   "devDependencies": {
     "elm": "0.19.1-6",
+    "elm-test": "0.19.1-revision17",
     "uglify-js": "3.19.3"
   },
   "files": [
