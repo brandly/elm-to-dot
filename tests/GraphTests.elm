@@ -34,6 +34,25 @@ suite =
                         |> Graph.insert "Utils" []
                         |> Graph.toString
                         |> Expect.equal (digraph [ "Main -> Utils" ])
+            , test "renders a module with no surviving imports as a bare node" <|
+                \_ ->
+                    Graph.empty
+                        |> Graph.insert "Main" [ "Json.Decode" ]
+                        |> Graph.toString
+                        |> Expect.equal (digraph [ "Main" ])
+            , test "renders an isolated module alongside connected ones" <|
+                \_ ->
+                    Graph.empty
+                        |> Graph.insert "Main" [ "Utils" ]
+                        |> Graph.insert "Utils" []
+                        |> Graph.insert "Orphan" []
+                        |> Graph.toString
+                        |> Expect.equal
+                            (digraph
+                                [ "Main -> Utils"
+                                , "Orphan"
+                                ]
+                            )
             , test "quotes module names that aren't bare identifiers" <|
                 \_ ->
                     Graph.empty
