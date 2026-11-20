@@ -1,6 +1,7 @@
 module MainTests exposing (suite)
 
 import Expect
+import Graph
 import Json.Decode as Decode
 import Main
 import Test exposing (Test, describe, test)
@@ -113,9 +114,52 @@ suite =
                                 , dependencies = [ "Html", "Json.Decode" ]
                                 }
                             )
+            , test "lists a module imported twice once" <|
+                \_ ->
+                    [ "module Page.Home exposing (view)"
+                    , ""
+                    , "import Html"
+                    , "import Html exposing (text)"
+                    , ""
+                    , "view ="
+                    , "    text \"hello\""
+                    , ""
+                    ]
+                        |> String.join "\n"
+                        |> Main.parseModules
+                        |> Result.map .dependencies
+                        |> Expect.equal (Ok [ "Html" ])
             , test "fails on something that isn't Elm" <|
                 \_ ->
                     Main.parseModules "this is not an elm module"
                         |> Expect.err
+            ]
+        , describe "update"
+            [ test "doesn't queue a file that is already pending" <|
+                \_ ->
+                    let
+                        -- Main imports A and B, and both import Shared.
+                        -- A has been read, so Shared is already pending.
+                        crawling =
+                            Main.Crawling
+                                { sourceDirs = [ "/proj/src" ]
+                                , graph =
+                                    Graph.empty
+                                        |> Graph.insert "Main" [ "A", "B" ]
+                                        |> Graph.insert "A" [ "Shared" ]
+                                , pending = [ "/proj/src/B.elm", "/proj/src/Shared.elm" ]
+                                }
+
+                        fileB =
+                            { name = "/proj/src/B.elm"
+                            , contents = "module B exposing (..)\n\nimport Shared\n\nb =\n    1\n"
+                            }
+                    in
+                    case Main.update { includeExternal = False, entryFile = "/proj/src/Main.elm" } (Main.ReadFileSuccess fileB) crawling of
+                        ( Main.Crawling state, _ ) ->
+                            Expect.equal [ "/proj/src/Shared.elm" ] state.pending
+
+                        _ ->
+                            Expect.fail "expected to still be crawling"
             ]
         ]
