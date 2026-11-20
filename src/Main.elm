@@ -174,7 +174,15 @@ update options msg model =
                             if options.includeExternal then
                                 mapGraph
                                     (\graph_ ->
-                                        List.foldl (\dependency g -> Graph.insert dependency [] g)
+                                        List.foldl
+                                            (\dependency g ->
+                                                -- Don't overwrite a module that's already been read.
+                                                if Graph.includes dependency g then
+                                                    g
+
+                                                else
+                                                    Graph.insert dependency [] g
+                                            )
                                             graph_
                                             dependencies
                                     )
