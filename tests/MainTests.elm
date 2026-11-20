@@ -1,5 +1,6 @@
 module MainTests exposing (suite)
 
+import Dict
 import Expect
 import Graph
 import Json.Decode as Decode
@@ -158,6 +159,36 @@ suite =
                     case Main.update { includeExternal = False, entryFile = "/proj/src/Main.elm" } (Main.ReadFileSuccess fileB) crawling of
                         ( Main.Crawling state, _ ) ->
                             Expect.equal [ "/proj/src/Shared.elm" ] state.pending
+
+                        _ ->
+                            Expect.fail "expected to still be crawling"
+            , test "with --include-external, keeps the edges of a module that's already been read" <|
+                \_ ->
+                    let
+                        -- Shared has been read and imports Html. B imports
+                        -- Shared and is read afterwards, while C is still pending.
+                        crawling =
+                            Main.Crawling
+                                { sourceDirs = [ "/proj/src" ]
+                                , graph =
+                                    Graph.empty
+                                        |> Graph.insert "Main" [ "Shared", "B", "C" ]
+                                        |> Graph.insert "Shared" [ "Html" ]
+                                        |> Graph.insert "Html" []
+                                        |> Graph.insert "B" []
+                                        |> Graph.insert "C" []
+                                , pending = [ "/proj/src/B.elm", "/proj/src/C.elm" ]
+                                }
+
+                        fileB =
+                            { name = "/proj/src/B.elm"
+                            , contents = "module B exposing (..)\n\nimport Shared\n\nb =\n    1\n"
+                            }
+                    in
+                    case Main.update { includeExternal = True, entryFile = "/proj/src/Main.elm" } (Main.ReadFileSuccess fileB) crawling of
+                        ( Main.Crawling state, _ ) ->
+                            Dict.get "Shared" state.graph
+                                |> Expect.equal (Just [ "Html" ])
 
                         _ ->
                             Expect.fail "expected to still be crawling"
