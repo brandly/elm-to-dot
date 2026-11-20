@@ -229,9 +229,21 @@ type alias ElmJson =
 elmJsonDecoder : Decode.Decoder ElmJson
 elmJsonDecoder =
     let
+        -- A missing "source-directories" field defaults to [ "src" ]
+        -- (package-style elm.json has no such field), but a present field
+        -- must decode strictly so a malformed value fails loudly instead
+        -- of silently falling back to the default.
         decodeSourceDirectories =
-            Decode.maybe (Decode.at [ "source-directories" ] (Decode.list Decode.string))
-                |> Decode.andThen (\sourceDirs -> Decode.succeed (Maybe.withDefault [ "src" ] sourceDirs))
+            Decode.maybe (Decode.field "source-directories" Decode.value)
+                |> Decode.andThen
+                    (\maybeValue ->
+                        case maybeValue of
+                            Nothing ->
+                                Decode.succeed [ "src" ]
+
+                            Just _ ->
+                                Decode.field "source-directories" (Decode.list Decode.string)
+                    )
     in
     Decode.map3 ElmJson
         (Decode.at [ "type" ] Decode.string)
@@ -276,11 +288,17 @@ getParent dir =
 makeAbsolute : String -> String -> String
 makeAbsolute pwd file =
     case String.split "/" file of
+        [ "" ] ->
+            pwd
+
         ".." :: tail ->
             makeAbsolute (getParent pwd) (String.join "/" tail)
 
+        [ "." ] ->
+            pwd
+
         "." :: tail ->
-            pwd ++ String.join "/" tail
+            pwd ++ "/" ++ String.join "/" tail
 
         "" :: _ ->
             file
@@ -292,8 +310,8 @@ makeAbsolute pwd file =
             file
 
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions : CliOptions -> Model -> Sub Msg
+subscriptions _ model =
     case model of
         Ready _ ->
             Sub.none
@@ -319,7 +337,7 @@ deadEndsToString deadEnds =
             in
             case deadEnd.problem of
                 Parser.Expecting str ->
-                    "Expecting " ++ str ++ "at " ++ position
+                    "Expecting " ++ str ++ " at " ++ position
 
                 Parser.ExpectingInt ->
                     "ExpectingInt at " ++ position
@@ -346,7 +364,7 @@ deadEndsToString deadEnds =
                     "ExpectingSymbol " ++ str ++ " at " ++ position
 
                 Parser.ExpectingKeyword str ->
-                    "ExpectingKeyword " ++ str ++ "at " ++ position
+                    "ExpectingKeyword " ++ str ++ " at " ++ position
 
                 Parser.ExpectingEnd ->
                     "ExpectingEnd at " ++ position
@@ -360,4 +378,4 @@ deadEndsToString deadEnds =
                 Parser.BadRepeat ->
                     "BadRepeat at " ++ position
     in
-    List.foldl (++) "" (List.map deadEndToString deadEnds)
+    String.concat (List.map deadEndToString deadEnds)

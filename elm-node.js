@@ -5,10 +5,10 @@ module.exports = app => {
     fs.readFile(fileName, (e, file) => {
       if (e) {
         app.ports.readFileError.send({
-          code: e.code,
-          syscall: e.syscall,
-          path: e.path,
-          message: e.message
+          code: e.code || '',
+          syscall: e.syscall || '',
+          path: e.path || '',
+          message: e.message || ''
         })
       } else {
         app.ports.readFileSuccess.send({
